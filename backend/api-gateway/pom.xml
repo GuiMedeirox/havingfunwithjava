@@ -25,6 +25,8 @@
     <properties>
         <!-- Spring Cloud 2025.0.x (Northfields) é compatível com Spring Boot 3.5.x. -->
         <spring-cloud.version>2025.0.0</spring-cloud.version>
+        <!-- jjwt 0.12.x: API moderna (builder fluente + parseSignedClaims). -->
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencyManagement>
@@ -54,6 +56,39 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+            WebFlux validation para o DTO de login (records + @Valid no controller).
+            Traz spring-boot-starter-web (não queremos servlet) — usamos apenas
+            o validation starter reativo, compatível com o contexto WebFlux do gateway.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!--
+            JWT (issue #10): emissão e validação de tokens HS256.
+            - jjwt-api: API pública em compile.
+            - jjwt-impl + jjwt-jackson: implementação/runtime em runtime scope.
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Testes -->

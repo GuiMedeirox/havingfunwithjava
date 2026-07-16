@@ -39,3 +39,11 @@ logging:
     com.havingfunwithjava.gateway: INFO
     # Log de rotas do gateway em DEBUG ajuda a diagnosticar roteamento.
     org.springframework.cloud.gateway: INFO
+
+# JWT (issue #10): segredo + expiração dos tokens emitidos em /auth/login.
+# O secret default é DEV-ONLY; sobrescrever em produção via APP_JWT_SECRET
+# (ou JWT_SECRET, mapeado abaixo). Requer >= 32 bytes para HS256.
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-secret-please-override-via-JWT_SECRET-env-var-havingfunwithjava}
+    expiration-minutes: 60
