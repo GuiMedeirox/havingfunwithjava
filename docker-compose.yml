@@ -32,6 +32,29 @@ services:
     networks:
       - havingfunwithjava-net
 
+  # api-gateway: entry point único (Spring Cloud Gateway, porta 8080).
+  # Roteia /catalog/** -> catalog-service via CATALOG_SERVICE_URL.
+  # NOTA: o catalog-service ainda não tem serviço neste compose; quando for
+  # adicionado (issue de dockerização), referencie-o por http://catalog-service:8081.
+  # Por enquanto o build é opcional (comentado) — descomente quando houver um Dockerfile
+  # em backend/api-gateway/Dockerfile e/ou o catalog-service estiver dockerizado.
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    # image: havingfunwithjava/api-gateway:0.0.1-SNAPSHOT
+    container_name: havingfunwithjava-api-gateway
+    restart: unless-stopped
+    environment:
+      CATALOG_SERVICE_URL: http://catalog-service:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - havingfunwithjava-net
+
 volumes:
   postgres-data:
     name: havingfunwithjava-postgres-data

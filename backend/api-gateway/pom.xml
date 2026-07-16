@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        api-gateway: entry point único do front-end.
+        Roteia requisições por prefixo de path para os serviços de backend
+        usando Spring Cloud Gateway (reativo, baseado em WebFlux).
+        Infraestrutura pura — sem Clean Architecture em 4 camadas.
+    -->
+    <parent>
+        <groupId>com.havingfunwithjava</groupId>
+        <artifactId>backend-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>api-gateway</artifactId>
+    <name>havingfunwithjava :: api-gateway</name>
+    <description>API Gateway baseado em Spring Cloud Gateway (roteamento por path prefix).</description>
+
+    <properties>
+        <!-- Spring Cloud 2025.0.x (Northfields) é compatível com Spring Boot 3.5.x. -->
+        <spring-cloud.version>2025.0.0</spring-cloud.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- BOM do Spring Cloud: centraliza versões dos starters (ex.: gateway). -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!--
+            Spring Cloud Gateway (reativo/WebFlux). NÃO usar spring-cloud-starter-gateway-mvc,
+            que é a variante servlet/blocking. Este starter traz o Netty como servidor.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+
+        <!-- Observabilidade / healthcheck do próprio gateway. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Testes -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Spring Cloud Gateway testa com reactor-test/WebTestClient; o starter-test já traz. -->
+        <!-- WireMock: stub do catalog-service nos testes de roteamento. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-contract-stub-runner</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Empacota como app Spring Boot executável. -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
