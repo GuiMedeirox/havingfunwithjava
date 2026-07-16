@@ -1,0 +1,39 @@
+name: CI
+
+# Pipeline de integração contínua do backend.
+# Roda em todo push para a main e em PRs, validando o build Maven (verify) do
+# monorepo. Por ora o backend só tem o parent POM (sem módulos), então `verify`
+# é um no-op que valida apenas a integridade do POM — suficiente para garantir
+# que o pipeline está vivo. Quando os serviços entrarem (issues #2+), os testes
+# rodam automaticamente aqui.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test (backend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build com Maven Wrapper
+        run: ./mvnw -B verify
