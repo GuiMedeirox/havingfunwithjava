@@ -7,6 +7,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.test.web.servlet.MvcResult;
+
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -106,5 +110,45 @@ class ProductControllerTest extends IntegrationTestBase {
 
         mockMvc.perform(post("/products").contentType(APPLICATION_JSON).content(payload))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void shouldGetProductByIdAndReturn200() throws Exception {
+        // Cria um produto e captura o id retornado
+        UUID categoryId = UUID.randomUUID();
+        String payload = """
+                {
+                  "name": "Teclado Mecânico",
+                  "description": "Switch brown",
+                  "amount": "349.90",
+                  "currency": "BRL",
+                  "categoryId": "%s"
+                }
+                """.formatted(categoryId);
+        MvcResult createResult = mockMvc.perform(post("/products")
+                        .contentType(APPLICATION_JSON).content(payload))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        JsonNode body = new ObjectMapper().readTree(createResult.getResponse().getContentAsString());
+        String createdId = body.get("id").asText();
+
+        // Busca pelo id → deve retornar o mesmo produto
+        mockMvc.perform(get("/products/" + createdId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(createdId))
+                .andExpect(jsonPath("$.name").value("Teclado Mecânico"))
+                .andExpect(jsonPath("$.amount").value("349.9000"))
+                .andExpect(jsonPath("$.categoryId").value(categoryId.toString()));
+    }
+
+    @Test
+    void shouldReturn404WhenProductNotFound() throws Exception {
+        // UUID que nunca foi persistido → 404 ProblemDetail
+        UUID randomId = UUID.randomUUID();
+        mockMvc.perform(get("/products/" + randomId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Not found"))
+                .andExpect(jsonPath("$.detail").exists());
     }
 }
