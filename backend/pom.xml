@@ -44,7 +44,7 @@
         parent roda sobre zero módulos (no-op), suficiente para validar o pipeline.
     -->
     <modules>
-        <!-- <module>catalog-service</module> -->
+        <module>catalog-service</module>
         <!-- <module>orders-service</module> -->
         <!-- <module>payment-service</module> -->
         <!-- <module>api-gateway</module> -->

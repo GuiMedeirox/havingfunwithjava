@@ -1,0 +1,33 @@
+# Configuração do catalog-service.
+# Variáveis com ${VAR:default} permitem sobrescrever via ambiente (Docker, K8s, CI).
+
+server:
+  port: 8081
+
+spring:
+  application:
+    name: catalog-service
+
+  # Datasource Postgres (pré-configurado para o compose local).
+  # Não usamos JPA neste slice, então o driver não é acionado na inicialização —
+  # apenas declarado no classpath para a issue #3. Evita dependência de banco no boot.
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/havingfunwithjava}
+    username: ${DB_USERNAME:havingfunwithjava}
+    password: ${DB_PASSWORD:havingfunwithjava}
+    driver-class-name: org.postgresql.Driver
+
+# Actuator: expõe health (para o endpoint customizado /health + o do actuator).
+# O management.health é default; mantemos /actuator/health público.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.havingfunwithjava.catalog: INFO
