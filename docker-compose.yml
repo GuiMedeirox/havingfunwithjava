@@ -1,0 +1,42 @@
+# Infraestrutura local para desenvolvimento da plataforma havingfunwithjava.
+# Por ora sobe apenas o PostgreSQL compartilhado entre os serviços.
+# RabbitMQ, Prometheus e Grafana entram em slices futuros (issues #18, #24).
+#
+# Uso:
+#   docker compose up -d postgres      # sobe só o banco
+#   docker compose logs -f postgres    # acompanha logs
+#   docker compose down                # para e remove containers (mantém o volume)
+#   docker compose down -v             # para e APAGA o volume (cuidado: perde dados)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: havingfunwithjava-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: havingfunwithjava
+      POSTGRES_PASSWORD: havingfunwithjava
+      POSTGRES_DB: havingfunwithjava
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isroot verifica se o Postgres está pronto para aceitar conexões.
+      # Os serviços dependem deste healthcheck para só iniciarem após o banco estar saudável.
+      test: ["CMD-SHELL", "pg_isready -U havingfunwithjava -d havingfunwithjava"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - havingfunwithjava-net
+
+volumes:
+  postgres-data:
+    name: havingfunwithjava-postgres-data
+
+networks:
+  havingfunwithjava-net:
+    name: havingfunwithjava-net
+    driver: bridge

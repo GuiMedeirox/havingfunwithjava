@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Parent POM do backend (havingfunwithjava).
+        Centraliza versões de dependências e configuração de plugins para todos os
+        microservices Java do monorepo (catalog, orders, payment, api-gateway).
+        Cada serviço herda deste parent e declara apenas suas dependências específicas.
+
+        Gerado a partir do Spring Initializr e adaptado para multi-módulo:
+        packaging=pom, sem classe Application (ela vive em cada serviço).
+        Usa a versão estável mais recente do Spring Boot disponível no Maven Central.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.3</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.havingfunwithjava</groupId>
+    <artifactId>backend-parent</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>havingfunwithjava :: backend parent</name>
+    <description>Parent POM multi-módulo para os microservices Java da plataforma de e-commerce.</description>
+
+    <properties>
+        <!-- Java 21 (LTS), exigido pelo Spring Boot 4.x -->
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    </properties>
+
+    <!--
+        Módulos do monorepo.
+        Vazio por enquanto — cada serviço será adicionado aqui quando for implementado
+        (catalog-service, orders-service, payment-service, api-gateway). O build do
+        parent roda sobre zero módulos (no-op), suficiente para validar o pipeline.
+    -->
+    <modules>
+        <!-- <module>catalog-service</module> -->
+        <!-- <module>orders-service</module> -->
+        <!-- <module>payment-service</module> -->
+        <!-- <module>api-gateway</module> -->
+    </modules>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!--
+                    JaCoCo: cobertura de testes.
+                    Declarado no pluginManagement do parent; cada serviço ativa o plugin
+                    em seu <build> quando quiser relatório de cobertura. Meta: 80% em
+                    domain/application (ver PRD > Testing Decisions).
+                -->
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <id>prepare-agent</id>
+                            <goals>
+                                <goal>prepare-agent</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>report</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
