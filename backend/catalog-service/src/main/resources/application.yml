@@ -9,13 +9,26 @@ spring:
     name: catalog-service
 
   # Datasource Postgres (pré-configurado para o compose local).
-  # Não usamos JPA neste slice, então o driver não é acionado na inicialização —
-  # apenas declarado no classpath para a issue #3. Evita dependência de banco no boot.
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/havingfunwithjava}
     username: ${DB_USERNAME:havingfunwithjava}
     password: ${DB_PASSWORD:havingfunwithjava}
     driver-class-name: org.postgresql.Driver
+
+  # JPA / Hibernate: ddl-auto=none porque o Flyway cuida do schema (migration V1).
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  # Flyway: migrations versionadas em db/migration. Aplicadas na inicialização.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
 # Actuator: expõe health (para o endpoint customizado /health + o do actuator).
 # O management.health é default; mantemos /actuator/health público.

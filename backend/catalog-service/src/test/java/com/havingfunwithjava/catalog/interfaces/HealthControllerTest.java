@@ -1,9 +1,8 @@
 package com.havingfunwithjava.catalog.interfaces;
 
+import com.havingfunwithjava.catalog.IntegrationTestBase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -17,12 +16,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * caminho HTTP → controller → use case → adaptador → Actuator. Valida o
  * comportamento externo (status 200 + campos esperados), não a implementação.
  *
- * Este teste prova que o molde Clean Architecture está "vivo": as 4 camadas
- * se conectam via injeção de dependência e o endpoint responde corretamente.
+ * Herda de {@link IntegrationTestBase} para reaproveitar a configuração de
+ * Spring + Testcontainers (Postgres real), já que o contexto agora exige datasource.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-class HealthControllerTest {
+class HealthControllerTest extends IntegrationTestBase {
 
     @Autowired
     private MockMvc mockMvc;

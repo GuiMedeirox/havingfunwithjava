@@ -1,0 +1,7 @@
+# Configuração de teste: usa Testcontainers com Postgres real via @ServiceConnection.
+# O Spring Boot detecta o container Postgres e injeta o datasource automaticamente.
+
+spring:
+  flyway:
+    # As migrations são as mesmas da aplicação — Testcontainers sobe Postgres limpo.
+    enabled: true
