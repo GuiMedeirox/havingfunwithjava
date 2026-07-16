@@ -1,12 +1,16 @@
 package com.havingfunwithjava.catalog.infrastructure.persistence;
 
+import com.havingfunwithjava.catalog.domain.CategoryId;
+import com.havingfunwithjava.catalog.domain.Page;
 import com.havingfunwithjava.catalog.domain.Product;
 import com.havingfunwithjava.catalog.domain.ProductId;
 import com.havingfunwithjava.catalog.domain.ProductRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Adaptador: implementa a porta de domínio {@link ProductRepository} usando
@@ -41,5 +45,21 @@ public class JpaProductRepository implements ProductRepository {
     @Override
     public Optional<Product> findById(ProductId id) {
         return jpaRepository.findById(id.value()).map(ProductMapper::toDomain);
+    }
+
+    @Override
+    public Page<Product> findActive(CategoryId categoryId, int page, int size) {
+        UUID categoryIdValue = categoryId == null ? null : categoryId.value();
+        org.springframework.data.domain.Page<ProductEntity> result =
+                jpaRepository.findActiveByCategory(categoryIdValue, PageRequest.of(page, size));
+
+        List<Product> items = result.stream().map(ProductMapper::toDomain).toList();
+        return new Page<>(items, result.getTotalElements(), page, size);
+    }
+
+    @Override
+    public long countActive(CategoryId categoryId) {
+        UUID categoryIdValue = categoryId == null ? null : categoryId.value();
+        return jpaRepository.countActiveByCategory(categoryIdValue);
     }
 }
