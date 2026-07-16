@@ -1,5 +1,6 @@
 package com.havingfunwithjava.catalog.interfaces;
 
+import com.havingfunwithjava.catalog.domain.ProductNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.validation.FieldError;
@@ -47,6 +48,18 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST, ex.getMessage());
         problem.setTitle("Domain error");
+        problem.setProperty("timestamp", Instant.now());
+        return problem;
+    }
+
+    /**
+     * Recurso de domínio não encontrado (ex.: produto inexistente) → 404.
+     */
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ProblemDetail handleNotFound(ProductNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Not found");
         problem.setProperty("timestamp", Instant.now());
         return problem;
     }
