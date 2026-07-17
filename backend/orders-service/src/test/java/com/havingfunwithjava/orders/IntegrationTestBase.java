@@ -6,13 +6,17 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.RabbitMQContainer;
 
 /**
  * Base para testes de integração (Seam 1: slice vertical) do orders-service.
  *
- * <p>Padrão "singleton container": um único Postgres estático compartilhado entre
- * todas as classes de teste, via {@link DynamicPropertySource}. O profile "test"
- * é ativado para alinhar com qualquer application-test.yml futuro.
+ * <p>Padrão "singleton container": um Postgres e um RabbitMQ estáticos compartilhados
+ * entre todas as classes de teste. O {@link DynamicPropertySource} registra as
+ * conexões dinâmicas (porta aleatória do container), sobrepondo o application.yml.
+ *
+ * <p>A partir da issue #18, o contexto exige RabbitMQ (o CreateOrderUseCase publica
+ * OrderCreated). Sem o container, o contexto não sobe.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -22,8 +26,12 @@ public abstract class IntegrationTestBase {
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16-alpine");
 
+    static final RabbitMQContainer RABBITMQ =
+            new RabbitMQContainer("rabbitmq:4-management-alpine");
+
     static {
         POSTGRES.start();
+        RABBITMQ.start();
     }
 
     @DynamicPropertySource
@@ -31,5 +39,13 @@ public abstract class IntegrationTestBase {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+    }
+
+    @DynamicPropertySource
+    static void rabbitProps(DynamicPropertyRegistry registry) {
+        registry.add("spring.rabbitmq.host", RABBITMQ::getHost);
+        registry.add("spring.rabbitmq.port", RABBITMQ::getAmqpPort);
+        registry.add("spring.rabbitmq.username", RABBITMQ::getAdminUsername);
+        registry.add("spring.rabbitmq.password", RABBITMQ::getAdminPassword);
     }
 }

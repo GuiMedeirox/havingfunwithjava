@@ -27,6 +27,22 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  # RabbitMQ (issue #18): broker para publicar OrderCreated.
+  # Sobrescrevível via ambiente (Docker: spring.rabbitmq.host=rabbitmq).
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:havingfunwithjava}
+    password: ${RABBITMQ_PASSWORD:havingfunwithjava}
+    # Connection recovery: tenta reconectar automaticamente se o broker cai.
+    connection-timeout: 10s
+    template:
+      retry:
+        enabled: true
+        initial-interval: 1000ms
+        max-attempts: 3
+        multiplier: 2.0
+
 management:
   endpoints:
     web:
@@ -45,3 +61,10 @@ logging:
 app:
   catalog:
     base-url: ${CATALOG_SERVICE_URL:http://localhost:8081}
+  # RabbitMQ (issue #18): nomes da exchange, fila e routing keys.
+  messaging:
+    orders-exchange: orders.exchange
+    payment-queue: payment.queue
+    payment-routing-key: order.created
+    dlx-exchange: orders.dlx
+    dlq-queue: payment.dlq

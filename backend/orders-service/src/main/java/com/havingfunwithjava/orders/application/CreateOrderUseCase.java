@@ -6,6 +6,8 @@ import com.havingfunwithjava.orders.domain.CustomerId;
 import com.havingfunwithjava.orders.domain.InvalidOrderException;
 import com.havingfunwithjava.orders.domain.Money;
 import com.havingfunwithjava.orders.domain.Order;
+import com.havingfunwithjava.orders.domain.OrderCreatedEvent;
+import com.havingfunwithjava.orders.domain.OrderEventPublisher;
 import com.havingfunwithjava.orders.domain.OrderItem;
 import com.havingfunwithjava.orders.domain.OrderRepository;
 import org.springframework.stereotype.Service;
@@ -21,14 +23,17 @@ import java.util.UUID;
 /**
  * Caso de uso: criar um pedido.
  *
- * <p>Orquestra o domínio e a integração com o catalog-service:
+ * <p>Orquestra o domínio, a integração com o catalog-service e a publicação do
+ * evento {@link OrderCreatedEvent}:
  * <ol>
  *   <li>Valida itens via {@link CatalogClient}: cada produto deve existir e estar ativo.</li>
  *   <li>Valida preços: o preço esperado pelo cliente deve bater com o preço atual do catalog.
  *       Isso evita que o cliente pague preço antigo (stale) ou manipulado.</li>
  *   <li>Constrói os {@link OrderItem} (snapshots de nome/preço no momento da compra).</li>
  *   <li>Cria o {@link Order} (em PENDING_PAYMENT) via factory do domínio.</li>
- *   <li>Persiste e retorna.</li>
+ *   <li>Persiste.</li>
+ *   <li>Publica {@code OrderCreated} no RabbitMQ (issue #18) — dentro da transação,
+ *       para que falha no broker reverta a criação do pedido (consistência).</li>
  * </ol>
  *
  * <p>NOTA sobre estoque: a issue #15 menciona "deduz estoque no catalog após criação".
@@ -43,10 +48,14 @@ public class CreateOrderUseCase {
 
     private final OrderRepository orderRepository;
     private final CatalogClient catalogClient;
+    private final OrderEventPublisher eventPublisher;
 
-    public CreateOrderUseCase(OrderRepository orderRepository, CatalogClient catalogClient) {
+    public CreateOrderUseCase(OrderRepository orderRepository,
+                              CatalogClient catalogClient,
+                              OrderEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.catalogClient = catalogClient;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -91,8 +100,15 @@ public class CreateOrderUseCase {
         // 3. Cria o pedido (factory valida invariantes: >=1 item, mesma moeda)
         Order order = Order.createNew(new CustomerId(command.customerId()), orderItems);
 
-        // 4. Persiste em PENDING_PAYMENT e retorna
-        return orderRepository.save(order);
+        // 4. Persiste em PENDING_PAYMENT
+        Order saved = orderRepository.save(order);
+
+        // 5. Publica OrderCreated no RabbitMQ (issue #18). Dentro da transação:
+        //    se o broker cair e a publicação falhar após retentativas, a transação
+        //    reverte e o pedido não fica órfão (sem processamento de pagamento).
+        eventPublisher.publishOrderCreated(OrderCreatedEvent.from(saved));
+
+        return saved;
     }
 
     /**
