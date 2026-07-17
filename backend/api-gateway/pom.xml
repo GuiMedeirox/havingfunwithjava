@@ -101,6 +101,17 @@
             <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
         </dependency>
 
+        <!--
+            Resilience4j (issue #12): circuit breaker para que a falha de um serviço
+            de backend não derrube a plataforma. O filter CircuitBreaker do Spring
+            Cloud Gateway usa o Resilience4j reativo por baixo. Quando o circuito
+            abre, o gateway retorna fallback em vez de propagar a falha.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+        </dependency>
+
         <!-- Testes -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
