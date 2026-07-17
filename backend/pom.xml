@@ -45,7 +45,7 @@
     -->
     <modules>
         <module>catalog-service</module>
-        <!-- <module>orders-service</module> -->
+        <module>orders-service</module>
         <!-- <module>payment-service</module> -->
         <module>api-gateway</module>
     </modules>
