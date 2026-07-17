@@ -1,5 +1,7 @@
 package com.havingfunwithjava.catalog.interfaces;
 
+import com.havingfunwithjava.catalog.domain.CategoryNotFoundException;
+import com.havingfunwithjava.catalog.domain.DuplicateSlugException;
 import com.havingfunwithjava.catalog.domain.ProductNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -53,13 +55,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Recurso de domínio não encontrado (ex.: produto inexistente) → 404.
+     * Recurso de domínio não encontrado (ex.: produto/categoria inexistente) → 404.
      */
-    @ExceptionHandler(ProductNotFoundException.class)
-    public ProblemDetail handleNotFound(ProductNotFoundException ex) {
+    @ExceptionHandler({ProductNotFoundException.class, CategoryNotFoundException.class})
+    public ProblemDetail handleNotFound(RuntimeException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setTitle("Not found");
+        problem.setProperty("timestamp", Instant.now());
+        return problem;
+    }
+
+    /**
+     * Conflito de domínio (ex.: slug de categoria duplicado) → 409 Conflict.
+     */
+    @ExceptionHandler(DuplicateSlugException.class)
+    public ProblemDetail handleConflict(DuplicateSlugException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Conflict");
         problem.setProperty("timestamp", Instant.now());
         return problem;
     }
