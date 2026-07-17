@@ -46,6 +46,7 @@ spring:
             # ---------------------------------------------------------------
             # /catalog/** escrita (POST/PUT/DELETE) -> catalog-service,
             # limite MODERADO (20 req/min por IP). Exige JWT admin (AuthenticationFilter).
+            # Circuit breaker (issue #12): protege contra falhas repetidas do catalog.
             # Ordenada ANTES da rota GET para o predicate Method prevalecer.
             # ---------------------------------------------------------------
             - id: catalog-write
@@ -60,10 +61,15 @@ spring:
                     redis-rate-limiter.replenishRate: ${RATE_LIMIT_WRITE_REPLENISH:20}
                     redis-rate-limiter.burstCapacity: ${RATE_LIMIT_WRITE_BURST:20}
                     redis-rate-limiter.requestedTokens: 1
+                - name: CircuitBreaker
+                  args:
+                    name: catalog-write
+                    fallbackUri: forward:/fallback
 
             # ---------------------------------------------------------------
             # /catalog/** leitura (GET/HEAD) -> catalog-service, limite GENEROSO
             # (60 req/min por IP). Rota pública (sem token).
+            # Circuit breaker (issue #12): idem catalog-write.
             # ---------------------------------------------------------------
             - id: catalog-read
               uri: ${CATALOG_SERVICE_URL:http://localhost:8081}
@@ -77,6 +83,10 @@ spring:
                     redis-rate-limiter.replenishRate: ${RATE_LIMIT_READ_REPLENISH:60}
                     redis-rate-limiter.burstCapacity: ${RATE_LIMIT_READ_BURST:60}
                     redis-rate-limiter.requestedTokens: 1
+                - name: CircuitBreaker
+                  args:
+                    name: catalog-read
+                    fallbackUri: forward:/fallback
 
 # Actuator: health do próprio gateway.
 management:
@@ -93,6 +103,43 @@ logging:
     com.havingfunwithjava.gateway: INFO
     # Log de rotas do gateway em DEBUG ajuda a diagnosticar roteamento.
     org.springframework.cloud.gateway: INFO
+    # Transições de estado do circuit breaker (issue #12).
+    io.github.resilience4j.circuitbreaker: INFO
+
+# Resilience4j (issue #12): circuit breakers por rota.
+# Quando o catalog-service falha repetidamente (5xx/timeouts), o circuito ABRE e
+# o gateway retorna fallback (forward:/fallback) em vez de propagar a falha.
+# Após wait-duration-in-open-state, entra em HALF_OPEN e testa uma request; se
+# passar, FECHA; se falhar, volta a OPEN.
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        # Janela deslizante baseada em contagem: últimas N chamadas.
+        sliding-window-type: count_based
+        sliding-window-size: 10
+        # Mínimo de chamadas na janela para avaliar o threshold.
+        minimum-number-of-calls: 5
+        # Threshold de taxa de falha (%). Acima disso, ABRE.
+        failure-rate-threshold: 50
+        # Tempo no estado OPEN antes de ir a HALF_OPEN.
+        wait-duration-in-open-state: 10s
+        # Chamadas de teste no estado HALF_OPEN.
+        permitted-number-of-calls-in-half-open-state: 3
+        # Considera 5xx e exceções (timeout, connection refused) como falhas.
+        # O Spring Cloud Gateway registra o CircuitBreaker como falha quando o
+        # upstream retorna 5xx ou lança erro de conexão.
+        automatic-transition-from-open-to-half-open-enabled: true
+    instances:
+      catalog-read:
+        base-config: default
+      catalog-write:
+        base-config: default
+  # Timelimiter: tempo máximo de espera por uma request antes de falhar o circuito.
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
 
 # JWT (issue #10): segredo + expiração dos tokens emitidos em /auth/login.
 # O secret default é DEV-ONLY; sobrescrever em produção via APP_JWT_SECRET
