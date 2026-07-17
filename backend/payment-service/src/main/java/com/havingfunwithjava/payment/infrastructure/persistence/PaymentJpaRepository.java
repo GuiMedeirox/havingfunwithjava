@@ -1,0 +1,14 @@
+package com.havingfunwithjava.payment.infrastructure.persistence;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Repositório Spring Data JPA (adaptador técnico) de pagamentos.
+ */
+public interface PaymentJpaRepository extends JpaRepository<PaymentEntity, UUID> {
+
+    Optional<PaymentEntity> findByOrderId(UUID orderId);
+}
