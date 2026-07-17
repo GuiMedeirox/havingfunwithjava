@@ -77,14 +77,21 @@ public class ProductController {
      * Lista produtos. Se algum parâmetro de paginação/filtro for informado,
      * retorna a resposta paginada {@link PagedProductsResponse}; caso contrário,
      * retorna a lista simples (compatibilidade com o comportamento anterior).
+     *
+     * Parâmetros (todos opcionais, combinam entre si):
+     * - q         termo de busca no nome (case-insensitive)
+     * - category  filtra por categoria (UUID)
+     * - page/size paginação (base-0)
      */
     @GetMapping
     public Object list(
+            @RequestParam(value = "q", required = false) String search,
             @RequestParam(value = "category", required = false) UUID categoryId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "size", required = false) Integer size) {
 
-        boolean wantsPagination = page != null || size != null || categoryId != null;
+        boolean hasSearch = search != null && !search.isBlank();
+        boolean wantsPagination = page != null || size != null || categoryId != null || hasSearch;
         if (!wantsPagination) {
             return listProducts.execute().stream()
                     .map(ProductResponse::from)
@@ -94,8 +101,9 @@ public class ProductController {
         int resolvedPage = page == null || page < 0 ? 0 : page;
         int resolvedSize = size == null || size <= 0 ? DEFAULT_PAGE_SIZE : size;
         CategoryId filter = categoryId == null ? null : new CategoryId(categoryId);
+        String term = hasSearch ? search.trim() : null;
 
-        Page<Product> result = listProducts.execute(filter, resolvedPage, resolvedSize);
+        Page<Product> result = listProducts.execute(filter, term, resolvedPage, resolvedSize);
         return PagedProductsResponse.from(result);
     }
 
