@@ -1,6 +1,9 @@
 # Configuração do api-gateway (Spring Cloud Gateway, reativo/WebFlux).
-# Rotas declarativas: /catalog/** -> catalog-service, com StripPrefix=1 para
-# remover o prefixo /catalog antes de repassar ao upstream.
+# Rotas declarativas com rate limiting por grupo (issue #11):
+#   - /catalog/** GET  -> generoso (60 req/min por IP)
+#   - /catalog/** POST/PUT/DELETE -> moderado (20 req/min por IP)
+#   - /auth/login      -> apertado (5 req/min por IP)
+# StripPrefix=1 remove o prefixo /catalog antes de repassar ao upstream.
 # URLs dos serviços sobrescrevíveis via variáveis de ambiente (Docker, K8s, CI).
 
 server:
@@ -10,19 +13,70 @@ spring:
   application:
     name: api-gateway
 
+  data:
+    redis:
+      # Backend do ReactiveRedisRateLimiter (issue #11). Host sobrescrevível via
+      # SPRING_DATA_REDIS_HOST (Docker: "redis"); default "localhost" para dev local.
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
   cloud:
     gateway:
       server:
         webflux:
           routes:
-            # /catalog/** -> catalog-service (default http://localhost:8081).
-            # StripPrefix=1 faz /catalog/health -> /health no upstream.
-            - id: catalog-service
+            # ---------------------------------------------------------------
+            # /auth/login -> handler local (forward:), limite APERTADO.
+            # Login é sensível ( credential stuffing): 5 req/min por IP.
+            # O filter RequestRateLimiter roda ANTES do ForwardRoutingFilter
+            # (ordem LOWEST_PRECEDENCE), então o limite é aplicado ao login.
+            # ---------------------------------------------------------------
+            - id: auth-login
+              uri: forward:/auth/login
+              predicates:
+                - Path=/auth/login
+                - Method=POST
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_LOGIN_REPLENISH:5}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_LOGIN_BURST:5}
+                    redis-rate-limiter.requestedTokens: 1
+
+            # ---------------------------------------------------------------
+            # /catalog/** escrita (POST/PUT/DELETE) -> catalog-service,
+            # limite MODERADO (20 req/min por IP). Exige JWT admin (AuthenticationFilter).
+            # Ordenada ANTES da rota GET para o predicate Method prevalecer.
+            # ---------------------------------------------------------------
+            - id: catalog-write
               uri: ${CATALOG_SERVICE_URL:http://localhost:8081}
               predicates:
                 - Path=/catalog/**
+                - Method=POST,PUT,DELETE,PATCH
               filters:
                 - StripPrefix=1
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_WRITE_REPLENISH:20}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_WRITE_BURST:20}
+                    redis-rate-limiter.requestedTokens: 1
+
+            # ---------------------------------------------------------------
+            # /catalog/** leitura (GET/HEAD) -> catalog-service, limite GENEROSO
+            # (60 req/min por IP). Rota pública (sem token).
+            # ---------------------------------------------------------------
+            - id: catalog-read
+              uri: ${CATALOG_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/catalog/**
+                - Method=GET,HEAD
+              filters:
+                - StripPrefix=1
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_READ_REPLENISH:60}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_READ_BURST:60}
+                    redis-rate-limiter.requestedTokens: 1
 
 # Actuator: health do próprio gateway.
 management:
@@ -47,3 +101,7 @@ app:
   jwt:
     secret: ${JWT_SECRET:dev-secret-please-override-via-JWT_SECRET-env-var-havingfunwithjava}
     expiration-minutes: 60
+  # Rate limiting (issue #11): valor do header Retry-After (segundos) adicionado
+  # às respostas 429. Conservador (60s = janela de 1 minuto dos limites).
+  ratelimit:
+    retry-after-seconds: 60

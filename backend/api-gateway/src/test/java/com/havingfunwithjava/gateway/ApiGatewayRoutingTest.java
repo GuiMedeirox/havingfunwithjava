@@ -5,7 +5,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -20,8 +19,10 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
 /**
  * Teste de slice vertical do api-gateway.
  *
- * Estratégia: sobe o contexto completo do gateway (@SpringBootTest, RANDOM_PORT)
- * e aponta CATALOG_SERVICE_URL para um {@link WireMockServer} local que responde
+ * Estratégia: sobe o contexto completo do gateway (@SpringBootTest, RANDOM_PORT
+ * — herdados de {@link AbstractGatewayIntegrationTest}, que também sobe o Redis
+ * via Testcontainers para o filter RequestRateLimiter) e aponta
+ * CATALOG_SERVICE_URL para um {@link WireMockServer} local que responde
  * a {@code GET /health} com um corpo fixo. Assim exercitamos o roteamento real
  * do Spring Cloud Gateway (predicates + StripPrefix) sem depender do
  * catalog-service de verdade — rápido e determinístico.
@@ -31,8 +32,7 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
  *  - O filtro StripPrefix=1 removeu o prefixo /catalog, pois o WireMock só
  *    registra a rota em /health (sem o prefixo).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class ApiGatewayRoutingTest {
+class ApiGatewayRoutingTest extends AbstractGatewayIntegrationTest {
 
     /** Stub do catalog-service em porta aleatória. */
     private static final WireMockServer CATALOG_STUB =
@@ -45,7 +45,7 @@ class ApiGatewayRoutingTest {
     }
 
     @LocalServerPort
-    private int gatewayPort;
+    private int gatewayPort; // mantido para diagnose; não usado nas asserções (WebTestClient já aponta para a porta correta)
 
     @Autowired
     private WebTestClient webTestClient;

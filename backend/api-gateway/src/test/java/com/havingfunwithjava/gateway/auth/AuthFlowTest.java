@@ -1,12 +1,12 @@
 package com.havingfunwithjava.gateway.auth;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.havingfunwithjava.gateway.AbstractGatewayIntegrationTest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -29,7 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 /**
  * Testes de slice vertical da autenticação JWT (issue #10).
  *
- * <p>Estratégia: contexto completo do gateway (@SpringBootTest, RANDOM_PORT) com o
+ * <p>Estratégia: contexto completo do gateway (@SpringBootTest, RANDOM_PORT —
+ * herdados de {@link AbstractGatewayIntegrationTest}, que também sobe o Redis via
+ * Testcontainers para o filter RequestRateLimiter) com o
  * {@code CATALOG_SERVICE_URL} apontando para um {@link WireMockServer} único e
  * durável (start em @BeforeAll, stop em @AfterAll). Os stubs são (re)registrados
  * em @BeforeEach — {@code resetAll} limpa o estado entre métodos.
@@ -51,9 +53,15 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
  *   <li>Rota protegida com token adulterado → 401.</li>
  *   <li>Rota pública GET /catalog/... segue sem token.</li>
  * </ul>
+ *
+ * <p>NOTA sobre rate limiting (issue #11): cada método faz poucas requests, bem
+ * abaixo do limite apertado de login (5/min). Mas como o limite é por IP e a
+ * classe inteira compartilha o mesmo IP de teste (127.0.0.1), métodos que fazem
+ * login poderiam, em tese, acumular. Na prática cada login consome 1 token e há
+ * poucos logins por classe, então não estouramos o burst. Se o teste ficar flaky,
+ * a suíte usa um Redis fresco por JVM (ver AbstractGatewayIntegrationTest).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class AuthFlowTest {
+class AuthFlowTest extends AbstractGatewayIntegrationTest {
 
     /** Stub único do catalog-service em porta aleatória, vivo durante toda a classe. */
     private static final WireMockServer CATALOG_STUB =
@@ -64,6 +72,16 @@ class AuthFlowTest {
         CATALOG_STUB.start();
         String url = "http://localhost:" + CATALOG_STUB.port();
         registry.add("CATALOG_SERVICE_URL", () -> url);
+        // Esta classe foca no fluxo de auth/JWT, não no rate limiting. Sobe todos
+        // os limites bem acima do que a suíte consome (vários logins por classe,
+        // todos do mesmo IP de teste) para evitar 429 falsos. Os limites reais
+        // (apertados) são exercitados isoladamente em RateLimitTest.
+        registry.add("RATE_LIMIT_LOGIN_REPLENISH", () -> "1000");
+        registry.add("RATE_LIMIT_LOGIN_BURST", () -> "1000");
+        registry.add("RATE_LIMIT_WRITE_REPLENISH", () -> "1000");
+        registry.add("RATE_LIMIT_WRITE_BURST", () -> "1000");
+        registry.add("RATE_LIMIT_READ_REPLENISH", () -> "1000");
+        registry.add("RATE_LIMIT_READ_BURST", () -> "1000");
     }
 
     @BeforeAll
