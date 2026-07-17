@@ -11,9 +11,9 @@ import java.util.List;
 /**
  * Caso de uso: listar produtos.
  *
- * Lê via a porta {@link ProductRepository}. Expor dois métodos:
+ * Lê via a porta {@link ProductRepository}. Expõe dois métodos:
  * - execute() → lista completa (sem paginação, para casos simples)
- * - execute(categoryId, page, size) → página filtrada (issue #5)
+ * - execute(categoryId, searchTerm, page, size) → página filtrada (issues #5/#6)
  */
 @Service
 public class ListProductsUseCase {
@@ -29,13 +29,14 @@ public class ListProductsUseCase {
     }
 
     /**
-     * Lista paginada, opcionalmente filtrada por categoria.
+     * Lista paginada, opcionalmente filtrada por categoria e termo de busca.
      *
-     * @param categoryId filtro; null ignora o filtro (todos os ativos)
+     * @param categoryId filtro de categoria; null ignora (todos os ativos)
+     * @param searchTerm termo de busca no nome (case-insensitive); null/blank ignora
      * @param page       índice base-0
      * @param size       tamanho da página
      */
-    public Page<Product> execute(CategoryId categoryId, int page, int size) {
-        return productRepository.findActive(categoryId, page, size);
+    public Page<Product> execute(CategoryId categoryId, String searchTerm, int page, int size) {
+        return productRepository.findActive(categoryId, searchTerm, page, size);
     }
 }

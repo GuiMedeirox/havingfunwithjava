@@ -29,17 +29,20 @@ public interface ProductRepository {
     Optional<Product> findById(ProductId id);
 
     /**
-     * Busca produtos ativos com filtro opcional por categoria e paginação.
+     * Busca produtos ativos com filtros opcionais (categoria, termo de busca) e
+     * paginação. Todos os filtros são opcionais e combinam entre si.
      *
      * @param categoryId filtro de categoria; se null, não filtra por categoria
+     * @param searchTerm termo de busca no nome (case-insensitive, LIKE %q%);
+     *                   se null/blank, não filtra por nome
      * @param page       índice da página (base-0)
      * @param size       tamanho da página
      * @return página de resultados com metadados (total, totalPages)
      */
-    Page<Product> findActive(CategoryId categoryId, int page, int size);
+    Page<Product> findActive(CategoryId categoryId, String searchTerm, int page, int size);
 
     /**
-     * Conta o total de produtos ativos (opcionalmente filtrados por categoria).
+     * Conta o total de produtos ativos (opcionalmente filtrados por categoria e termo).
      */
-    long countActive(CategoryId categoryId);
+    long countActive(CategoryId categoryId, String searchTerm);
 }
