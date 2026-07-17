@@ -17,8 +17,16 @@ import java.util.Objects;
  * </ul>
  *
  * <p>O total é CALCULADO a partir dos itens (não armazenado como campo mutável):
- * soma dos subtotais. O status nasce como {@link OrderStatus#PENDING_PAYMENT};
- * transições são formalizadas na issue #17 (aqui só expomos o accessor).
+ * soma dos subtotais. O status nasce como {@link OrderStatus#PENDING_PAYMENT}.
+ *
+ * <h2>Máquina de estados (issue #17)</h2>
+ * <pre>
+ *   PENDING_PAYMENT ──markAsPaid()──────────→ PAID             (terminal)
+ *   PENDING_PAYMENT ──markAsPaymentFailed()─→ PAYMENT_FAILED
+ *   PAYMENT_FAILED  ──cancel()──────────────→ CANCELLED         (terminal)
+ * </pre>
+ * <p>Estados terminais: PAID, CANCELLED. Qualquer transição fora desse conjunto
+ * lança {@link IllegalOrderTransitionException}.
  *
  * @param id          identificador (gerado ao criar)
  * @param customerId  quem comprou
@@ -83,5 +91,63 @@ public record Order(
      */
     public String currency() {
         return items.get(0).currency();
+    }
+
+    // ---------------------------------------------------------------
+    // Máquina de estados (issue #17)
+    // ---------------------------------------------------------------
+
+    /**
+     * Transição: pagamento confirmado. Válido apenas a partir de PENDING_PAYMENT.
+     *
+     * @return nova instância de Order com status PAID (imutabilidade do record)
+     * @throws IllegalOrderTransitionException se o estado atual não for PENDING_PAYMENT
+     */
+    public Order markAsPaid() {
+        requireTransitionFrom(OrderStatus.PENDING_PAYMENT, OrderStatus.PAID);
+        return withStatus(OrderStatus.PAID);
+    }
+
+    /**
+     * Transição: pagamento falhou definitivamente. Válido apenas a partir de
+     * PENDING_PAYMENT. O pedido vai para PAYMENT_FAILED e pode ser cancelado
+     * depois (via {@link #cancel()}).
+     *
+     * @return nova instância com status PAYMENT_FAILED
+     * @throws IllegalOrderTransitionException se o estado atual não for PENDING_PAYMENT
+     */
+    public Order markAsPaymentFailed() {
+        requireTransitionFrom(OrderStatus.PENDING_PAYMENT, OrderStatus.PAYMENT_FAILED);
+        return withStatus(OrderStatus.PAYMENT_FAILED);
+    }
+
+    /**
+     * Transição: cancelar pedido. Válido apenas a partir de PAYMENT_FAILED (falha
+     * de pagamento seguida de cancelamento automático). Um pedido PAID não pode
+     * ser cancelado por esta via (estornos seriam outro fluxo).
+     *
+     * @return nova instância com status CANCELLED (terminal)
+     * @throws IllegalOrderTransitionException se o estado atual não for PAYMENT_FAILED
+     */
+    public Order cancel() {
+        requireTransitionFrom(OrderStatus.PAYMENT_FAILED, OrderStatus.CANCELLED);
+        return withStatus(OrderStatus.CANCELLED);
+    }
+
+    /**
+     * Valida que o estado atual é o exigido para a transição desejada; caso
+     * contrário lança {@link IllegalOrderTransitionException}.
+     */
+    private void requireTransitionFrom(OrderStatus required, OrderStatus target) {
+        if (this.status != required) {
+            throw new IllegalOrderTransitionException(this.status, target);
+        }
+    }
+
+    /**
+     * Cópia imutável com novo status (preserva id, customer, items, createdAt).
+     */
+    private Order withStatus(OrderStatus newStatus) {
+        return new Order(this.id, this.customerId, this.items, newStatus, this.createdAt);
     }
 }

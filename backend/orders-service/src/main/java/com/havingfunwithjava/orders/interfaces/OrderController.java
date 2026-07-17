@@ -85,4 +85,20 @@ public class OrderController {
         Order order = getOrder.execute(new OrderId(id));
         return OrderResponse.from(order);
     }
+
+    /**
+     * Expõe apenas o status atual do pedido (issue #17). Leve e útil para polling
+     * do front-end acompanhando o andamento do pagamento.
+     */
+    @GetMapping("/{id}/status")
+    public OrderStatusResponse getStatus(@PathVariable UUID id) {
+        Order order = getOrder.execute(new OrderId(id));
+        return new OrderStatusResponse(order.id().value(), order.status().name());
+    }
+
+    /**
+     * DTO mínimo: status do pedido.
+     */
+    public record OrderStatusResponse(UUID id, String status) {
+    }
 }
