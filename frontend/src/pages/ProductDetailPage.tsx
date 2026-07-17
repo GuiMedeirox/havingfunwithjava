@@ -1,18 +1,22 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchProductById } from '../api/products'
 import { fetchCategories } from '../api/categories'
 import { formatPrice } from '../lib/format'
 import Spinner from '../components/Spinner'
+import { useCart } from '../cart/CartContext'
 
 /**
  * Página de detalhe do produto (rota `/products/:id`).
  *
  * Busca o produto por id e também as categorias (para resolver o nome da
- * categoria a partir do categoryId). Botão "Adicionar ao carrinho" é só UI
- * — a lógica do carrinho vem em outro slice.
+ * categoria a partir do categoryId). Botão "Adicionar ao carrinho" integra
+ * com o useCart (adiciona e mostra feedback de adicionado).
  */
 export default function ProductDetailPage() {
+  const { add } = useCart()
+  const [added, setAdded] = useState(false)
   const { id = '' } = useParams()
 
   const productQuery = useQuery({
@@ -118,15 +122,29 @@ export default function ProductDetailPage() {
                 </p>
               </div>
             )}
-            <div className="mt-8">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                className="w-full rounded-lg bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:w-auto"
-                /* UI only — ação do carrinho vem em outro slice. */
-                onClick={() => undefined}
+                className="rounded-lg bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                onClick={() => {
+                  add(product)
+                  setAdded(true)
+                  setTimeout(() => setAdded(false), 2000)
+                }}
               >
                 Adicionar ao carrinho
               </button>
+              {added && (
+                <span className="text-sm font-medium text-green-700">
+                  ✓ Adicionado!
+                </span>
+              )}
+              <Link
+                to="/cart"
+                className="text-sm font-medium text-blue-700 hover:text-blue-800"
+              >
+                Ver carrinho →
+              </Link>
             </div>
           </div>
         </div>

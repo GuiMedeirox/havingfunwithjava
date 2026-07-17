@@ -40,3 +40,52 @@ export interface PagedProducts {
   page: number
   size: number
 }
+
+// ---------------------------------------------------------------
+// Pedidos (orders-service via api-gateway)
+// ---------------------------------------------------------------
+
+/** Item de um pedido (snapshot do produto no momento da compra). */
+export interface OrderItem {
+  productId: string
+  productName: string
+  quantity: number
+  unitPrice: string
+  subtotal: string
+  currency: string
+}
+
+/** Estado de um pedido no ciclo de pagamento. */
+export type OrderStatus =
+  | 'PENDING_PAYMENT'
+  | 'PAID'
+  | 'PAYMENT_FAILED'
+  | 'CANCELLED'
+
+/** Pedido completo retornado pelo GET /orders/{id} e na lista do cliente. */
+export interface Order {
+  id: string
+  customerId: string
+  status: OrderStatus
+  createdAt: string
+  totalAmount: string
+  currency: string
+  items: OrderItem[]
+}
+
+/** Payload do POST /orders. */
+export interface CreateOrderRequest {
+  customerId: string
+  items: {
+    productId: string
+    quantity: number
+    expectedUnitPrice: string
+    currency: string
+  }[]
+}
+
+/** Item do carrinho (estado local do cliente). */
+export interface CartItem {
+  product: Product
+  quantity: number
+}
