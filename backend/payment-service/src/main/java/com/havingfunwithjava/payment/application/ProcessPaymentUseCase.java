@@ -5,6 +5,10 @@ import com.havingfunwithjava.payment.domain.Payment;
 import com.havingfunwithjava.payment.domain.PaymentGateway;
 import com.havingfunwithjava.payment.domain.PaymentMethod;
 import com.havingfunwithjava.payment.domain.PaymentRepository;
+import com.havingfunwithjava.payment.domain.PaymentResultEvent;
+import com.havingfunwithjava.payment.domain.PaymentResultPublisher;
+import com.havingfunwithjava.payment.domain.PaymentSucceeded;
+import com.havingfunwithjava.payment.domain.PaymentFailed;
 import com.havingfunwithjava.payment.domain.PaymentStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +24,7 @@ import java.util.stream.Collectors;
 /**
  * Caso de uso: processar um pagamento a partir de um evento OrderCreated.
  *
- * <p>Orquestra o domínio e as strategies:
+ * <p>Orquestra o domínio, as strategies, e a publicação do resultado (issue #21):
  * <ol>
  *   <li>Cria o {@link Payment} em PENDING (a partir do orderId, método e valor).</li>
  *   <li>Seleciona a {@link PaymentStrategy} para o método (Strategy pattern).</li>
@@ -28,11 +32,18 @@ import java.util.stream.Collectors;
  *   <li>Atualiza o status conforme o resultado: AUTHORIZED, DECLINED, ou
  *       mantém PENDING p/ retentativa em caso de falha transitória (issue #20).</li>
  *   <li>Persiste o pagamento final.</li>
+ *   <li>Publica o {@link PaymentResultEvent} (PaymentSucceeded/PaymentFailed) no
+ *       broker, para o orders-service atualizar o status do pedido (issue #22).</li>
  * </ol>
  *
- * <p>NOTA sobre método: neste slice, o método é definido pelo consumer (default
- * CREDIT_CARD). Em produção, viria no evento OrderCreated ou seria escolhido pelo
- * cliente no checkout.
+ * <p>Idempotência dupla (issue #21):
+ * <ul>
+ *   <li>Se o mesmo OrderCreated chega duas vezes (redelivery), o passo 1 já
+ *       encontra o pagamento existente e retorna sem reprocessar — não publica
+ *       resultado duplicado.</li>
+ *   <li>A publicação do resultado acontece dentro da transação; falha no broker
+ *       reverte o processamento.</li>
+ * </ul>
  */
 @Service
 public class ProcessPaymentUseCase {
@@ -41,17 +52,16 @@ public class ProcessPaymentUseCase {
 
     private final PaymentRepository paymentRepository;
     private final PaymentGateway gateway;
+    private final PaymentResultPublisher resultPublisher;
     private final Map<PaymentMethod, PaymentStrategy> strategiesByMethod;
 
-    /**
-     * @param strategies Spring injeta todas as implementações de {@link PaymentStrategy};
-     *                   indexamos por {@link PaymentStrategy#supports()} p/ lookup O(1).
-     */
     public ProcessPaymentUseCase(PaymentRepository paymentRepository,
                                  PaymentGateway gateway,
+                                 PaymentResultPublisher resultPublisher,
                                  List<PaymentStrategy> strategies) {
         this.paymentRepository = paymentRepository;
         this.gateway = gateway;
+        this.resultPublisher = resultPublisher;
         this.strategiesByMethod = strategies.stream()
                 .collect(Collectors.toMap(PaymentStrategy::supports, Function.identity()));
     }
@@ -59,7 +69,8 @@ public class ProcessPaymentUseCase {
     @Transactional
     public Payment execute(UUID orderId, PaymentMethod method, Money amount) {
         // 1. Idempotência: se já existe pagamento para este pedido, não reprocessa.
-        //    (Pode acontecer por redelivery do RabbitMQ.)
+        //    (Pode acontecer por redelivery do RabbitMQ.) Também evita publicar
+        //    resultado duplicado — só publicamos na primeira vez.
         var existing = paymentRepository.findByOrderId(orderId);
         if (existing.isPresent()) {
             log.info("Pagamento já existe para o pedido {} (status {}); ignorando",
@@ -86,13 +97,36 @@ public class ProcessPaymentUseCase {
             case DECLINED -> payment.decline();
             case FALHA_TRANSIENTE -> {
                 // Falha transitória: mantém PENDING p/ retentativa (issue #20).
-                // Neste slice, apenas logamos; o backoff exponencial vem na #20.
+                // NÃO publica resultado ainda — só publica em estado terminal.
                 log.warn("Falha transitória no pagamento do pedido {}: {}", orderId, result.reason());
                 yield payment;
             }
         };
 
         // 6. Persiste o estado final
-        return paymentRepository.save(updated);
+        Payment saved = paymentRepository.save(updated);
+
+        // 7. Publica o resultado (issue #21) apenas em estado terminal
+        //    (AUTHORIZED ou DECLINED). Estados PENDING (falha transitória) não
+        //    publicam — aguardam retentativa.
+        publishResultIfTerminal(saved, result.reason());
+
+        return saved;
+    }
+
+    /**
+     * Publica o evento de resultado se o pagamento chegou a um estado terminal.
+     */
+    private void publishResultIfTerminal(Payment payment, String failureReason) {
+        switch (payment.status()) {
+            case AUTHORIZED -> resultPublisher.publish(
+                    new PaymentSucceeded(payment.orderId(), payment.id().value()));
+            case DECLINED -> resultPublisher.publish(
+                    new PaymentFailed(payment.orderId(),
+                            failureReason != null ? failureReason : "Pagamento recusado"));
+            // PENDING (falha transitória) e FAILED não publicam aqui
+            default -> log.debug("Pagamento {} não terminal ({}); resultado não publicado",
+                    payment.orderId(), payment.status());
+        }
     }
 }

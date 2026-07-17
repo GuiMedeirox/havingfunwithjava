@@ -67,3 +67,7 @@ app:
     orders-exchange: orders.exchange
     payment-queue: payment.queue
     payment-routing-key: order.created
+    # Resultado do pagamento (issue #21): fila + routing keys consumidas pelo orders-service.
+    result-queue: orders.payment-result.queue
+    result-routing-key-succeeded: payment.succeeded
+    result-routing-key-failed: payment.failed
