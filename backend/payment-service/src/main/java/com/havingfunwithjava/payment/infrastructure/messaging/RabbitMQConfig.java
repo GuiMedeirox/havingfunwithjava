@@ -45,6 +45,17 @@ public class RabbitMQConfig {
     @Value("${app.messaging.dlq-queue:payment.dlq}")
     private String dlqQueue;
 
+    // --- Fila de resultado (issue #21): orders-service consome aqui ---
+
+    @Value("${app.messaging.result-queue:orders.payment-result.queue}")
+    private String resultQueue;
+
+    @Value("${app.messaging.result-routing-key-succeeded:payment.succeeded}")
+    private String resultRoutingKeySucceeded;
+
+    @Value("${app.messaging.result-routing-key-failed:payment.failed}")
+    private String resultRoutingKeyFailed;
+
     @Bean
     public TopicExchange ordersExchange() {
         return new TopicExchange(ordersExchange, true, false);
@@ -63,6 +74,30 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(paymentQueue())
                 .to(ordersExchange())
                 .with(paymentRoutingKey);
+    }
+
+    /**
+     * Fila de resultado do pagamento (issue #21). O orders-service (issue #22)
+     * consome aqui os eventos PaymentSucceeded / PaymentFailed. Bindings com duas
+     * routing keys (payment.succeeded, payment.failed) na mesma exchange topic.
+     */
+    @Bean
+    public Queue resultQueue() {
+        return QueueBuilder.durable(resultQueue).build();
+    }
+
+    @Bean
+    public Binding resultSucceededBinding() {
+        return BindingBuilder.bind(resultQueue())
+                .to(ordersExchange())
+                .with(resultRoutingKeySucceeded);
+    }
+
+    @Bean
+    public Binding resultFailedBinding() {
+        return BindingBuilder.bind(resultQueue())
+                .to(ordersExchange())
+                .with(resultRoutingKeyFailed);
     }
 
     @Bean
