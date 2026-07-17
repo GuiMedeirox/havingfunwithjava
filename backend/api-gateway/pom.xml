@@ -91,6 +91,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!--
+            Redis reativo (issue #11): backend de contadores do RequestRateLimiter.
+            O ReactiveRedisRateLimiter do Spring Cloud Gateway usa o client Lettuce
+            reativo deste starter para executar o script Lua (token bucket) no Redis.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+        </dependency>
+
         <!-- Testes -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -102,6 +112,21 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-contract-stub-runner</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            Testcontainers (issue #11): sobe um Redis 7 real nos testes de integração
+            do rate limiting, evitando mock frágil do backend Lua do ReactiveRedisRateLimiter.
+            @ServiceConnection injeta host/porta do container em spring.data.redis.*.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

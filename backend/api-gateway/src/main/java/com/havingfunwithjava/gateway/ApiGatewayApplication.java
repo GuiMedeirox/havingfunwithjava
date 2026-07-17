@@ -1,6 +1,7 @@
 package com.havingfunwithjava.gateway;
 
 import com.havingfunwithjava.gateway.auth.JwtProperties;
+import com.havingfunwithjava.gateway.ratelimit.RateLimitProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -14,10 +15,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * em 4 camadas aqui: o gateway só roteia.
  *
  * <p>{@link EnableConfigurationProperties} registra {@link JwtProperties} (prefixo
- * {@code app.jwt}) explicitamente, em vez de scanear o classpath inteiro.
+ * {@code app.jwt}) e {@link RateLimitProperties} (prefixo {@code app.ratelimit})
+ * explicitamente, em vez de scanear o classpath inteiro.
  */
 @SpringBootApplication
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, RateLimitProperties.class})
 public class ApiGatewayApplication {
 
     public static void main(String[] args) {

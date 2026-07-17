@@ -1,9 +1,11 @@
 # Infraestrutura local para desenvolvimento da plataforma havingfunwithjava.
-# Por ora sobe apenas o PostgreSQL compartilhado entre os serviços.
+# Sobe o PostgreSQL compartilhado entre os serviços e o Redis usado pelo
+# api-gateway como backend de rate limiting (issue #11).
 # RabbitMQ, Prometheus e Grafana entram em slices futuros (issues #18, #24).
 #
 # Uso:
 #   docker compose up -d postgres      # sobe só o banco
+#   docker compose up -d redis         # sobe só o Redis
 #   docker compose logs -f postgres    # acompanha logs
 #   docker compose down                # para e remove containers (mantém o volume)
 #   docker compose down -v             # para e APAGA o volume (cuidado: perde dados)
@@ -32,8 +34,30 @@ services:
     networks:
       - havingfunwithjava-net
 
+  # Redis (issue #11): backend de contadores do RequestRateLimiter do api-gateway.
+  # Imagem alpine leve; sem senha (dev local). Persistência AOF desligada para
+  # zerar contadores entre reinícios (desejável em dev). Em produção, habilitar
+  # --requirepass via command e persistência via volume.
+  redis:
+    image: redis:7-alpine
+    container_name: havingfunwithjava-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      # redis-cli ping responde PONG quando o Redis está pronto.
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - havingfunwithjava-net
+
   # api-gateway: entry point único (Spring Cloud Gateway, porta 8080).
   # Roteia /catalog/** -> catalog-service via CATALOG_SERVICE_URL.
+  # Usa o Redis acima como backend de rate limiting (SPRING_DATA_REDIS_HOST=redis).
   # NOTA: o catalog-service ainda não tem serviço neste compose; quando for
   # adicionado (issue de dockerização), referencie-o por http://catalog-service:8081.
   # Por enquanto o build é opcional (comentado) — descomente quando houver um Dockerfile
@@ -47,10 +71,14 @@ services:
     restart: unless-stopped
     environment:
       CATALOG_SERVICE_URL: http://catalog-service:8081
+      # Host do Redis para o ReactiveRedisRateLimiter (nome do serviço na rede).
+      SPRING_DATA_REDIS_HOST: redis
     ports:
       - "8080:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - havingfunwithjava-net
