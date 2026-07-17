@@ -63,6 +63,15 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!--
+            Mensageria (issue #18): publicar OrderCreated no RabbitMQ após criar pedido.
+            Spring AMQP abstrai conexão, declaração de exchange/queue, serialização.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
         <!-- Testes -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -78,6 +87,11 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>rabbitmq</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

@@ -55,6 +55,29 @@ services:
     networks:
       - havingfunwithjava-net
 
+  # RabbitMQ (issue #18): broker de mensageria para o fluxo assíncrono
+  # orders → payment. O orders-service publica OrderCreated; o payment-service
+  # (quando existir) consome. Porta 5672 = AMQP, 15672 = Management UI.
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: havingfunwithjava-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: havingfunwithjava
+      RABBITMQ_DEFAULT_PASS: havingfunwithjava
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      # rabbitmq-diagnostics ping responde ok quando o nó está pronto.
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - havingfunwithjava-net
+
   # api-gateway: entry point único (Spring Cloud Gateway, porta 8080).
   # Roteia /catalog/** -> catalog-service via CATALOG_SERVICE_URL.
   # Usa o Redis acima como backend de rate limiting (SPRING_DATA_REDIS_HOST=redis).
