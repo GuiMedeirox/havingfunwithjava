@@ -1,6 +1,7 @@
 package com.havingfunwithjava.orders.interfaces;
 
 import com.havingfunwithjava.orders.domain.InvalidOrderException;
+import com.havingfunwithjava.orders.domain.OrderNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.validation.FieldError;
@@ -45,6 +46,18 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
         problem.setTitle("Invalid order");
+        problem.setProperty("timestamp", Instant.now());
+        return problem;
+    }
+
+    /**
+     * Pedido não encontrado → 404.
+     */
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ProblemDetail handleNotFound(OrderNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Not found");
         problem.setProperty("timestamp", Instant.now());
         return problem;
     }
