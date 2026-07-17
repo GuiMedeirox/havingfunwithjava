@@ -1,5 +1,6 @@
 package com.havingfunwithjava.orders.interfaces;
 
+import com.havingfunwithjava.orders.domain.IllegalOrderTransitionException;
 import com.havingfunwithjava.orders.domain.InvalidOrderException;
 import com.havingfunwithjava.orders.domain.OrderNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -58,6 +59,18 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setTitle("Not found");
+        problem.setProperty("timestamp", Instant.now());
+        return problem;
+    }
+
+    /**
+     * Transição inválida da máquina de estados do pedido → 409 Conflict.
+     */
+    @ExceptionHandler(IllegalOrderTransitionException.class)
+    public ProblemDetail handleIllegalTransition(IllegalOrderTransitionException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Conflict");
         problem.setProperty("timestamp", Instant.now());
         return problem;
     }
