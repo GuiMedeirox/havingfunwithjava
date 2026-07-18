@@ -1,0 +1,48 @@
+# Configuração do Prometheus (issue #24).
+# Scrapeia os 4 serviços backend pelo endpoint /actuator/prometheus.
+# Cada serviço expõe métricas de JVM, HTTP, HikariCP, RabbitMQ (conforme deps).
+#
+# Em Docker, os serviços são acessíveis pelo nome na rede havingfunwithjava-net.
+# Localmente (sem Docker), usar localhost com as portas de cada serviço.
+
+global:
+  scrape_interval: 15s      # coleta a cada 15s
+  evaluation_interval: 15s  # avalia regras a cada 15s
+
+scrape_configs:
+  # O próprio Prometheus (auto-monitoramento)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # api-gateway (porta 8080 no host, 8080 no container)
+  - job_name: 'api-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['api-gateway:8080']
+        labels:
+          service: 'api-gateway'
+
+  # catalog-service (porta 8081)
+  - job_name: 'catalog-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['catalog-service:8081']
+        labels:
+          service: 'catalog-service'
+
+  # orders-service (porta 8082)
+  - job_name: 'orders-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['orders-service:8082']
+        labels:
+          service: 'orders-service'
+
+  # payment-service (porta 8083)
+  - job_name: 'payment-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['payment-service:8083']
+        labels:
+          service: 'payment-service'

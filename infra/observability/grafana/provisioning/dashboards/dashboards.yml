@@ -1,0 +1,13 @@
+# Provisionamento de dashboards do Grafana (issue #24).
+# Carrega automaticamente JSONs do diretório /var/lib/grafana/dashboards.
+apiVersion: 1
+
+providers:
+  - name: 'havingfunwithjava'
+    orgId: 1
+    folder: 'Having Fun With Java'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
