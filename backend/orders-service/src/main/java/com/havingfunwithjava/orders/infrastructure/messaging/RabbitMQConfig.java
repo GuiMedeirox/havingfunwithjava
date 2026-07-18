@@ -48,6 +48,17 @@ public class RabbitMQConfig {
     @Value("${app.messaging.dlq-queue}")
     private String dlqQueue;
 
+    // --- Fila de resultado (issue #22): consome PaymentSucceeded/Failed do payment-service ---
+
+    @Value("${app.messaging.result-queue:orders.payment-result.queue}")
+    private String resultQueue;
+
+    @Value("${app.messaging.result-routing-key-succeeded:payment.succeeded}")
+    private String resultRoutingKeySucceeded;
+
+    @Value("${app.messaging.result-routing-key-failed:payment.failed}")
+    private String resultRoutingKeyFailed;
+
     // --- Exchange principal (topic): orders.exchange ---
 
     @Bean
@@ -72,6 +83,29 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(paymentQueue())
                 .to(ordersExchange())
                 .with(paymentRoutingKey);
+    }
+
+    // --- Fila de resultado (issue #22): orders.payment-result.queue ---
+    // O payment-service publica PaymentSucceeded/Failed aqui; o consumer do
+    // orders-service atualiza o status do pedido.
+
+    @Bean
+    public Queue resultQueue() {
+        return QueueBuilder.durable(resultQueue).build();
+    }
+
+    @Bean
+    public Binding resultSucceededBinding() {
+        return BindingBuilder.bind(resultQueue())
+                .to(ordersExchange())
+                .with(resultRoutingKeySucceeded);
+    }
+
+    @Bean
+    public Binding resultFailedBinding() {
+        return BindingBuilder.bind(resultQueue())
+                .to(ordersExchange())
+                .with(resultRoutingKeyFailed);
     }
 
     // --- Dead-Letter Exchange (direct) + DLQ ---
