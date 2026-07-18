@@ -1,16 +1,25 @@
-# Infraestrutura local para desenvolvimento da plataforma havingfunwithjava.
-# Sobe o PostgreSQL compartilhado entre os serviços e o Redis usado pelo
-# api-gateway como backend de rate limiting (issue #11).
-# RabbitMQ, Prometheus e Grafana entram em slices futuros (issues #18, #24).
+# Infraestrutura local completa da plataforma havingfunwithjava.
+# Sobe TODOS os serviços (backend + frontend + infra) com um único comando.
 #
 # Uso:
-#   docker compose up -d postgres      # sobe só o banco
-#   docker compose up -d redis         # sobe só o Redis
-#   docker compose logs -f postgres    # acompanha logs
-#   docker compose down                # para e remove containers (mantém o volume)
-#   docker compose down -v             # para e APAGA o volume (cuidado: perde dados)
+#   docker compose up -d                  # sobe tudo
+#   docker compose up -d postgres redis rabbitmq  # só a infra
+#   docker compose logs -f catalog-service         # logs de um serviço
+#   docker compose down                   # para e remove containers (mantém volumes)
+#   docker compose down -v                # para e APAGA volumes (cuidado: perde dados)
+#
+# Após subir, acessar:
+#   Frontend:        http://localhost:5173
+#   API Gateway:     http://localhost:8080
+#   RabbitMQ UI:     http://localhost:15672 (havingfunwithjava/havingfunwithjava)
+#   Prometheus:      http://localhost:9090
+#   Grafana:         http://localhost:3000 (admin/admin)
 
 services:
+  # ---------------------------------------------------------------
+  # Infraestrutura
+  # ---------------------------------------------------------------
+
   postgres:
     image: postgres:16-alpine
     container_name: havingfunwithjava-postgres
@@ -24,8 +33,6 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      # pg_isroot verifica se o Postgres está pronto para aceitar conexões.
-      # Os serviços dependem deste healthcheck para só iniciarem após o banco estar saudável.
       test: ["CMD-SHELL", "pg_isready -U havingfunwithjava -d havingfunwithjava"]
       interval: 10s
       timeout: 5s
@@ -34,10 +41,6 @@ services:
     networks:
       - havingfunwithjava-net
 
-  # Redis (issue #11): backend de contadores do RequestRateLimiter do api-gateway.
-  # Imagem alpine leve; sem senha (dev local). Persistência AOF desligada para
-  # zerar contadores entre reinícios (desejável em dev). Em produção, habilitar
-  # --requirepass via command e persistência via volume.
   redis:
     image: redis:7-alpine
     container_name: havingfunwithjava-redis
@@ -46,7 +49,6 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      # redis-cli ping responde PONG quando o Redis está pronto.
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
@@ -55,9 +57,6 @@ services:
     networks:
       - havingfunwithjava-net
 
-  # RabbitMQ (issue #18): broker de mensageria para o fluxo assíncrono
-  # orders → payment. O orders-service publica OrderCreated; o payment-service
-  # (quando existir) consome. Porta 5672 = AMQP, 15672 = Management UI.
   rabbitmq:
     image: rabbitmq:4-management-alpine
     container_name: havingfunwithjava-rabbitmq
@@ -69,7 +68,6 @@ services:
       - "5672:5672"
       - "15672:15672"
     healthcheck:
-      # rabbitmq-diagnostics ping responde ok quando o nó está pronto.
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
       timeout: 10s
@@ -78,39 +76,123 @@ services:
     networks:
       - havingfunwithjava-net
 
-  # api-gateway: entry point único (Spring Cloud Gateway, porta 8080).
-  # Roteia /catalog/** -> catalog-service via CATALOG_SERVICE_URL.
-  # Usa o Redis acima como backend de rate limiting (SPRING_DATA_REDIS_HOST=redis).
-  # NOTA: o catalog-service ainda não tem serviço neste compose; quando for
-  # adicionado (issue de dockerização), referencie-o por http://catalog-service:8081.
-  # Por enquanto o build é opcional (comentado) — descomente quando houver um Dockerfile
-  # em backend/api-gateway/Dockerfile e/ou o catalog-service estiver dockerizado.
-  api-gateway:
+  # ---------------------------------------------------------------
+  # Serviços backend (build multi-stage a partir da raiz do repo)
+  # ---------------------------------------------------------------
+
+  catalog-service:
     build:
-      context: ./backend/api-gateway
-      dockerfile: Dockerfile
-    # image: havingfunwithjava/api-gateway:0.0.1-SNAPSHOT
-    container_name: havingfunwithjava-api-gateway
+      context: .
+      dockerfile: backend/catalog-service/Dockerfile
+    container_name: havingfunwithjava-catalog
     restart: unless-stopped
     environment:
-      CATALOG_SERVICE_URL: http://catalog-service:8081
-      # Host do Redis para o ReactiveRedisRateLimiter (nome do serviço na rede).
-      SPRING_DATA_REDIS_HOST: redis
+      DB_URL: jdbc:postgresql://postgres:5432/havingfunwithjava
+      DB_USERNAME: havingfunwithjava
+      DB_PASSWORD: havingfunwithjava
     ports:
-      - "8080:8080"
+      - "8081:8081"
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - havingfunwithjava-net
 
+  orders-service:
+    build:
+      context: .
+      dockerfile: backend/orders-service/Dockerfile
+    container_name: havingfunwithjava-orders
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/havingfunwithjava
+      DB_USERNAME: havingfunwithjava
+      DB_PASSWORD: havingfunwithjava
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: havingfunwithjava
+      RABBITMQ_PASSWORD: havingfunwithjava
+      CATALOG_SERVICE_URL: http://catalog-service:8081
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      catalog-service:
+        condition: service_started
+    networks:
+      - havingfunwithjava-net
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: backend/payment-service/Dockerfile
+    container_name: havingfunwithjava-payment
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/havingfunwithjava
+      DB_USERNAME: havingfunwithjava
+      DB_PASSWORD: havingfunwithjava
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: havingfunwithjava
+      RABBITMQ_PASSWORD: havingfunwithjava
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - havingfunwithjava-net
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: backend/api-gateway/Dockerfile
+    container_name: havingfunwithjava-api-gateway
+    restart: unless-stopped
+    environment:
+      CATALOG_SERVICE_URL: http://catalog-service:8081
+      ORDERS_SERVICE_URL: http://orders-service:8082
+      SPRING_DATA_REDIS_HOST: redis
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      catalog-service:
+        condition: service_started
+      orders-service:
+        condition: service_started
+    networks:
+      - havingfunwithjava-net
+
   # ---------------------------------------------------------------
-  # Observabilidade (issue #24): Prometheus coleta métricas, Grafana visualiza.
+  # Frontend (Vite dev server com proxy para o gateway)
   # ---------------------------------------------------------------
 
-  # Prometheus: coleta métricas de /actuator/prometheus de cada serviço.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+    container_name: havingfunwithjava-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks:
+      - havingfunwithjava-net
+
+  # ---------------------------------------------------------------
+  # Observabilidade
+  # ---------------------------------------------------------------
+
   prometheus:
     image: prom/prometheus:latest
     container_name: havingfunwithjava-prometheus
@@ -122,7 +204,6 @@ services:
     networks:
       - havingfunwithjava-net
 
-  # Grafana: dashboards com datasource Prometheus auto-provisionado.
   grafana:
     image: grafana/grafana:latest
     container_name: havingfunwithjava-grafana
