@@ -117,12 +117,15 @@ management:
     tags:
       application: ${spring.application.name}
   # Tracing distribuído (issue #25): OpenTelemetry via OTLP.
+  # Quando OTLP_ENDPOINT não está definido, desabilita o export (só gera trace IDs nos logs).
   tracing:
     sampling:
       probability: 1.0
+    export:
+      enabled: ${OTLP_ENABLED:false}
   otlp:
     tracing:
-      endpoint: ${OTLP_ENDPOINT:}
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4317}
 
 logging:
   level:
