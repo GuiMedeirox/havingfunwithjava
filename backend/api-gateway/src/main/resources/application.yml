@@ -88,6 +88,22 @@ spring:
                     name: catalog-read
                     fallbackUri: forward:/fallback
 
+            # ---------------------------------------------------------------
+            # /orders/** -> orders-service (criar, listar, detalhar pedidos).
+            # Rota para o fluxo de pedidos do frontend. Rate limiting moderado.
+            # ---------------------------------------------------------------
+            - id: orders
+              uri: ${ORDERS_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/orders/**
+              filters:
+                - StripPrefix=1
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_ORDERS_REPLENISH:20}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_ORDERS_BURST:20}
+                    redis-rate-limiter.requestedTokens: 1
+
 # Actuator: health do próprio gateway.
 management:
   endpoints:
