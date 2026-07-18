@@ -42,6 +42,16 @@ spring:
         initial-interval: 1000ms
         max-attempts: 3
         multiplier: 2.0
+    # Listener (issue #22): consome PaymentSucceeded/Failed da fila de resultado.
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 1
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          max-attempts: 3
+          multiplier: 2.0
 
 management:
   endpoints:
@@ -68,3 +78,7 @@ app:
     payment-routing-key: order.created
     dlx-exchange: orders.dlx
     dlq-queue: payment.dlq
+    # Fila de resultado (issue #22): consome PaymentSucceeded/Failed do payment-service.
+    result-queue: orders.payment-result.queue
+    result-routing-key-succeeded: payment.succeeded
+    result-routing-key-failed: payment.failed
