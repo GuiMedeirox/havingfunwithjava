@@ -59,15 +59,15 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-  # Tracing distribuído (issue #25): OpenTelemetry via OTLP.
-  # Endpoint do collector (Jaeger/Tempo OTLP). Default desabilitado (vazio).
-  # Para ativar: OTLP_ENDPOINT=http://jaeger:4317
+  # Tracing distribuído (issue #25): export desabilitado por default.
   tracing:
     sampling:
-      probability: 1.0  # amostra 100% em dev; reduzir em produção
+      probability: 1.0
+    export:
+      enabled: ${OTLP_ENABLED:false}
   otlp:
     tracing:
-      endpoint: ${OTLP_ENDPOINT:}
+      endpoint: ${OTLP_ENDPOINT:http://localhost:4317}
 
 logging:
   level:
