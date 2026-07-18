@@ -16,16 +16,21 @@ spring:
 
   jpa:
     hibernate:
+        default_schema: payment
       ddl-auto: none
     open-in-view: false
     properties:
       hibernate:
+        default_schema: payment
         jdbc:
           time_zone: UTC
 
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: payment
+    default-schema: payment
+    create-schemas: true
 
   # RabbitMQ: consome OrderCreated da payment.queue (declarada pelo orders-service).
   # O payment-service também declara a topologia (idempotente) para não depender

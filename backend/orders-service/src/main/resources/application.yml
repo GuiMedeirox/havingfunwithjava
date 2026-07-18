@@ -16,16 +16,21 @@ spring:
 
   jpa:
     hibernate:
+        default_schema: orders
       ddl-auto: none
     open-in-view: false
     properties:
       hibernate:
+        default_schema: orders
         jdbc:
           time_zone: UTC
 
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: orders
+    default-schema: orders
+    create-schemas: true
 
   # RabbitMQ (issue #18): broker para publicar OrderCreated.
   # Sobrescrevível via ambiente (Docker: spring.rabbitmq.host=rabbitmq).
