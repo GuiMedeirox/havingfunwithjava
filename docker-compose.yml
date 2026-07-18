@@ -106,6 +106,40 @@ services:
     networks:
       - havingfunwithjava-net
 
+  # ---------------------------------------------------------------
+  # Observabilidade (issue #24): Prometheus coleta métricas, Grafana visualiza.
+  # ---------------------------------------------------------------
+
+  # Prometheus: coleta métricas de /actuator/prometheus de cada serviço.
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: havingfunwithjava-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./infra/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - havingfunwithjava-net
+
+  # Grafana: dashboards com datasource Prometheus auto-provisionado.
+  grafana:
+    image: grafana/grafana:latest
+    container_name: havingfunwithjava-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - havingfunwithjava-net
+
 volumes:
   postgres-data:
     name: havingfunwithjava-postgres-data
