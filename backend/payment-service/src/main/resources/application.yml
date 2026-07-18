@@ -61,8 +61,14 @@ logging:
   level:
     com.havingfunwithjava.payment: INFO
 
-# Topologia RabbitMQ (mesmos nomes do orders-service — declaração idempotente).
+# Retentativas de pagamento (issue #20) + topologia RabbitMQ.
 app:
+  payment:
+    retry:
+      # Backoff exponencial para falhas transitórias do gateway.
+      max-attempts: 3
+      initial-delay-ms: 1000
+      multiplier: 2.0
   messaging:
     orders-exchange: orders.exchange
     payment-queue: payment.queue

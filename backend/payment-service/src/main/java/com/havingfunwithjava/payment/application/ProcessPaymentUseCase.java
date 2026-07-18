@@ -53,15 +53,18 @@ public class ProcessPaymentUseCase {
     private final PaymentRepository paymentRepository;
     private final PaymentGateway gateway;
     private final PaymentResultPublisher resultPublisher;
+    private final RetryProperties retryProperties;
     private final Map<PaymentMethod, PaymentStrategy> strategiesByMethod;
 
     public ProcessPaymentUseCase(PaymentRepository paymentRepository,
                                  PaymentGateway gateway,
                                  PaymentResultPublisher resultPublisher,
+                                 RetryProperties retryProperties,
                                  List<PaymentStrategy> strategies) {
         this.paymentRepository = paymentRepository;
         this.gateway = gateway;
         this.resultPublisher = resultPublisher;
+        this.retryProperties = retryProperties;
         this.strategiesByMethod = strategies.stream()
                 .collect(Collectors.toMap(PaymentStrategy::supports, Function.identity()));
     }
@@ -69,8 +72,6 @@ public class ProcessPaymentUseCase {
     @Transactional
     public Payment execute(UUID orderId, PaymentMethod method, Money amount) {
         // 1. Idempotência: se já existe pagamento para este pedido, não reprocessa.
-        //    (Pode acontecer por redelivery do RabbitMQ.) Também evita publicar
-        //    resultado duplicado — só publicamos na primeira vez.
         var existing = paymentRepository.findByOrderId(orderId);
         if (existing.isPresent()) {
             log.info("Pagamento já existe para o pedido {} (status {}); ignorando",
@@ -88,34 +89,63 @@ public class ProcessPaymentUseCase {
             throw new IllegalStateException("Nenhuma strategy para o método: " + method);
         }
 
-        // 4. Processa via strategy → gateway
-        PaymentGateway.GatewayResult result = strategy.process(payment, gateway);
+        // 4. Loop de retentativas com backoff exponencial (issue #20)
+        PaymentGateway.GatewayResult result = null;
+        int maxAttempts = retryProperties.getMaxAttempts();
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            result = strategy.process(payment, gateway);
 
-        // 5. Atualiza status conforme resultado
+            if (result.status() != PaymentGateway.GatewayStatus.FALHA_TRANSIENTE) {
+                // Resultado definitivo (AUTHORIZED ou DECLINED) — para de tentar
+                break;
+            }
+
+            // Falha transitória: decide se retenta ou esgota
+            if (attempt < maxAttempts) {
+                long delay = retryProperties.delayForAttempt(attempt + 1);
+                log.warn("Falha transitória no pagamento do pedido {} (tentativa {}/{}): {}. "
+                                + "Retentando em {}ms",
+                        orderId, attempt, maxAttempts, result.reason(), delay);
+                payment = payment.incrementAttempts();
+                paymentRepository.save(payment);
+                sleep(delay);
+            } else {
+                log.error("Pagamento do pedido {} esgotou {} tentativas; marcando FAILED",
+                        orderId, maxAttempts);
+            }
+        }
+
+        // 5. Atualiza status conforme resultado final
         Payment updated = switch (result.status()) {
             case AUTHORIZED -> payment.authorize();
             case DECLINED -> payment.decline();
-            case FALHA_TRANSIENTE -> {
-                // Falha transitória: mantém PENDING p/ retentativa (issue #20).
-                // NÃO publica resultado ainda — só publica em estado terminal.
-                log.warn("Falha transitória no pagamento do pedido {}: {}", orderId, result.reason());
-                yield payment;
-            }
+            case FALHA_TRANSIENTE -> payment.fail(); // esgotou retentativas
         };
 
         // 6. Persiste o estado final
         Payment saved = paymentRepository.save(updated);
 
-        // 7. Publica o resultado (issue #21) apenas em estado terminal
-        //    (AUTHORIZED ou DECLINED). Estados PENDING (falha transitória) não
-        //    publicam — aguardam retentativa.
+        // 7. Publica o resultado (issue #21) em estado terminal
         publishResultIfTerminal(saved, result.reason());
 
         return saved;
     }
 
     /**
+     * Sleep tratando InterruptedException (best-effort; não interrompe o fluxo).
+     */
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Sleep de backoff interrompido");
+        }
+    }
+
+    /**
      * Publica o evento de resultado se o pagamento chegou a um estado terminal.
+     * Agora também publica PaymentFailed quando o status é FAILED (esgotou retentativas — issue #20).
      */
     private void publishResultIfTerminal(Payment payment, String failureReason) {
         switch (payment.status()) {
@@ -124,7 +154,10 @@ public class ProcessPaymentUseCase {
             case DECLINED -> resultPublisher.publish(
                     new PaymentFailed(payment.orderId(),
                             failureReason != null ? failureReason : "Pagamento recusado"));
-            // PENDING (falha transitória) e FAILED não publicam aqui
+            case FAILED -> resultPublisher.publish(
+                    new PaymentFailed(payment.orderId(),
+                            failureReason != null ? failureReason : "Falha após retentativas"));
+            // PENDING não publica — aguarda retentativa
             default -> log.debug("Pagamento {} não terminal ({}); resultado não publicado",
                     payment.orderId(), payment.status());
         }
