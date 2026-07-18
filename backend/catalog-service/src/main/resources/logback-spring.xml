@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Logs JSON estruturados (issue #25): inclui traceId/spanId do MDC.
+         O Micrometer Tracing popula o MDC com traceId/spanId em cada requisição.
+         Em produção, estes logs iriam para Loki/ELK para correlação entre serviços. -->
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdc>true</includeMdc>
+            <customFields>{"service":"catalog-service"}</customFields>
+        </encoder>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="JSON"/>
+    </root>
+</configuration>
