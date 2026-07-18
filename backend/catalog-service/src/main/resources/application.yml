@@ -18,7 +18,6 @@ spring:
   # JPA / Hibernate: ddl-auto=none porque o Flyway cuida do schema (migration V1).
   jpa:
     hibernate:
-        default_schema: catalog
       ddl-auto: none
     open-in-view: false
     properties:
