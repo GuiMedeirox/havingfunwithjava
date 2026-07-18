@@ -28,6 +28,9 @@ services:
       POSTGRES_USER: havingfunwithjava
       POSTGRES_PASSWORD: havingfunwithjava
       POSTGRES_DB: havingfunwithjava
+      # Search path inclui os schemas dedicados de cada serviço.
+      # Sem isso, o HikariCP não encontra as tabelas em catalog/orders/payment.
+      POSTGRES_INITDB_ARGS: "--search-path=catalog,orders,payment,public"
     ports:
       - "5433:5432"
     volumes:
