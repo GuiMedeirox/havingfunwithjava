@@ -97,7 +97,6 @@ spring:
               predicates:
                 - Path=/orders/**
               filters:
-                - StripPrefix=1
                 - name: RequestRateLimiter
                   args:
                     redis-rate-limiter.replenishRate: ${RATE_LIMIT_ORDERS_REPLENISH:20}
